@@ -8,11 +8,12 @@
     <version>0.1.0</version>
     <name>Kubernetes Read-only MCP</name>
     <properties>
-        <maven.compiler.release>25</maven.compiler.release>
+        <maven.compiler.release>21</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <mcp.version>2.0.0</mcp.version>
         <kubernetes.client.version>27.0.0</kubernetes.client.version>
         <jackson.version>2.18.9</jackson.version>
+        <junit.version>5.11.4</junit.version>
     </properties>
     <dependencies>
         <dependency>
@@ -30,6 +31,12 @@
             <artifactId>jackson-databind</artifactId>
             <version>${jackson.version}</version>
         </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <version>${junit.version}</version>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
     <build>
         <plugins>
@@ -44,6 +51,11 @@
                 <artifactId>maven-jar-plugin</artifactId>
                 <version>3.4.2</version>
                 <configuration><archive><manifest><mainClass>com.example.kubernetesmcp.KubernetesMcpApplication</mainClass></manifest></archive></configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>3.5.2</version>
             </plugin>
         </plugins>
     </build>

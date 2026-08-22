@@ -25,28 +25,33 @@ final class KubernetesReadService {
 
     KubernetesReadService(KubernetesSettings settings) throws IOException {
         this.settings = settings;
-        ApiClient client = settings.kubeconfigPath() == null
-            ? Config.defaultClient()
-            : ClientBuilder.kubeconfig(KubeConfig.loadKubeConfig(new FileReader(settings.kubeconfigPath()))).build();
+        ApiClient client = createClient(settings);
         this.core = new CoreV1Api(client);
         this.apps = new AppsV1Api(client);
+    }
+
+    private static ApiClient createClient(KubernetesSettings settings) throws IOException {
+        if (settings.kubeconfigPath() == null) return Config.defaultClient();
+        try (FileReader reader = new FileReader(settings.kubeconfigPath())) {
+            return ClientBuilder.kubeconfig(KubeConfig.loadKubeConfig(reader)).build();
+        }
     }
 
     List<String> listAllowedNamespaces() { return settings.allowedNamespaces(); }
 
     List<Map<String, Object>> listPods(String namespace) throws ApiException {
         settings.requireAllowedNamespace(namespace);
-        return core.listNamespacedPod(namespace).execute().getItems().stream().map(this::podSummary).toList();
+        return core.listNamespacedPod(namespace).limit(500).execute().getItems().stream().map(this::podSummary).toList();
     }
 
     List<Map<String, Object>> listDeployments(String namespace) throws ApiException {
         settings.requireAllowedNamespace(namespace);
-        return apps.listNamespacedDeployment(namespace).execute().getItems().stream().map(this::deploymentSummary).toList();
+        return apps.listNamespacedDeployment(namespace).limit(500).execute().getItems().stream().map(this::deploymentSummary).toList();
     }
 
     List<Map<String, Object>> listEvents(String namespace) throws ApiException {
         settings.requireAllowedNamespace(namespace);
-        return core.listNamespacedEvent(namespace).execute().getItems().stream().map(this::eventSummary).toList();
+        return core.listNamespacedEvent(namespace).limit(500).execute().getItems().stream().map(this::eventSummary).toList();
     }
 
     String readPodLogs(String namespace, String pod, String container, int tailLines) throws ApiException {
@@ -60,16 +65,30 @@ final class KubernetesReadService {
     List<Map<String, Object>> diagnoseNamespace(String namespace) throws ApiException {
         settings.requireAllowedNamespace(namespace);
         List<Map<String, Object>> problems = new ArrayList<>();
-        for (V1Pod pod : core.listNamespacedPod(namespace).execute().getItems()) {
+        for (V1Pod pod : core.listNamespacedPod(namespace).limit(500).execute().getItems()) {
             String phase = pod.getStatus() == null ? "Unknown" : pod.getStatus().getPhase();
             List<String> reasons = new ArrayList<>();
             if (!"Running".equals(phase) && !"Succeeded".equals(phase)) reasons.add("phase=" + phase);
+            if (pod.getMetadata() != null && pod.getMetadata().getDeletionTimestamp() != null) reasons.add("terminating");
             List<V1ContainerStatus> statuses = pod.getStatus() == null ? null : pod.getStatus().getContainerStatuses();
             if (statuses != null) for (V1ContainerStatus status : statuses) {
-                if (status.getState() != null && status.getState().getWaiting() != null) reasons.add(status.getName() + ": " + status.getState().getWaiting().getReason());
+                if (status.getState() != null && status.getState().getWaiting() != null) {
+                    reasons.add(status.getName() + ": waiting=" + status.getState().getWaiting().getReason());
+                }
+                Integer exitCode = status.getState() == null || status.getState().getTerminated() == null
+                    ? null : status.getState().getTerminated().getExitCode();
+                if (exitCode != null && exitCode != 0) {
+                    reasons.add(status.getName() + ": terminated=" + status.getState().getTerminated().getReason()
+                        + ", exitCode=" + exitCode);
+                }
                 if (status.getRestartCount() != null && status.getRestartCount() > 0) reasons.add(status.getName() + ": restarts=" + status.getRestartCount());
             }
-            if (!reasons.isEmpty()) problems.add(Map.of("pod", pod.getMetadata().getName(), "reasons", reasons));
+            if (!reasons.isEmpty()) {
+                Map<String, Object> problem = new LinkedHashMap<>();
+                problem.put("pod", pod.getMetadata() == null ? "<unknown>" : pod.getMetadata().getName());
+                problem.put("reasons", reasons);
+                problems.add(problem);
+            }
         }
         return problems;
     }
