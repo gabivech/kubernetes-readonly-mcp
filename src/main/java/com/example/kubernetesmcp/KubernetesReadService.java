@@ -4,9 +4,9 @@ import io.kubernetes.client.openapi.ApiClient;
 import io.kubernetes.client.openapi.ApiException;
 import io.kubernetes.client.openapi.apis.AppsV1Api;
 import io.kubernetes.client.openapi.apis.CoreV1Api;
+import io.kubernetes.client.openapi.models.CoreV1Event;
 import io.kubernetes.client.openapi.models.V1ContainerStatus;
 import io.kubernetes.client.openapi.models.V1Deployment;
-import io.kubernetes.client.openapi.models.V1Event;
 import io.kubernetes.client.openapi.models.V1Pod;
 import io.kubernetes.client.util.ClientBuilder;
 import io.kubernetes.client.util.Config;
@@ -113,7 +113,7 @@ final class KubernetesReadService {
         return result;
     }
 
-    private Map<String, Object> eventSummary(V1Event event) {
+    private Map<String, Object> eventSummary(CoreV1Event event) {
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("type", event.getType());
         result.put("reason", event.getReason());
